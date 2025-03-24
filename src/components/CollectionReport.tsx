@@ -141,7 +141,7 @@ export const CollectionReport = ({
       {Object.keys(reportData).length > 0 ? (
         <div className="space-y-4">
           {type === 'period' && (
-            Object.entries(reportData).map(([periodKey, periodCollections]: [string, Collection[]]) => (
+            Object.entries(reportData as Record<string, Collection[]>).map(([periodKey, periodCollections]) => (
               <Card key={periodKey}>
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-center">
@@ -176,7 +176,7 @@ export const CollectionReport = ({
           )}
           
           {type === 'client' && (
-            Object.entries(reportData).map(([clientKey, clientCollections]: [string, Collection[]]) => (
+            Object.entries(reportData as Record<string, Collection[]>).map(([clientKey, clientCollections]) => (
               <Card key={clientKey}>
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-center">
@@ -204,11 +204,12 @@ export const CollectionReport = ({
                     </tbody>
                   </table>
                 </CardContent>
-              </Card><boltAction type="file" filePath="src/components/CollectionReport.tsx">            ))
+              </Card>
+            ))
           )}
           
           {type === 'machine' && (
-            Object.entries(reportData).map(([machineKey, machineCollections]: [string, Collection[]]) => (
+            Object.entries(reportData as Record<string, Collection[]>).map(([machineKey, machineCollections]) => (
               <Card key={machineKey}>
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-center">
