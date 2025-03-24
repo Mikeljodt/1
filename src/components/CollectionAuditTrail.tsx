@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import { formatDate } from '@/lib/utils';
-import { Collection } from '@/store/slices/collectionsSlice';
 
 export const CollectionAuditTrail = () => {
   const { collections } = useSelector((state: RootState) => state.collections);

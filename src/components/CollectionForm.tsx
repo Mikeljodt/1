@@ -9,9 +9,8 @@ import { fetchAllCounters, updateMachineCounter } from '@/store/slices/counterSl
 import { fetchMachines } from '@/store/slices/machinesSlice';
 import { fetchClients } from '@/store/slices/clientsSlice';
 import { toast } from '@/components/ui/use-toast';
-import { CounterSelector } from '@/components/CounterSelector';
 import { SignaturePad } from '@/components/SignatureCanvas';
-import { formatDate, formatCurrency, generateUniqueId, calculateCounterDifference, calculateRevenue } from '@/lib/utils';
+import { formatCurrency, generateUniqueId, calculateCounterDifference, calculateRevenue } from '@/lib/utils';
 
 interface CollectionFormProps {
   onSuccess?: () => void;
@@ -22,7 +21,6 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
   const dispatch = useDispatch<AppDispatch>();
   const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
-  const counterState = useSelector((state: RootState) => state.counter);
   
   // Form state
   const [selectedClient, setSelectedClient] = useState<number | null>(null);
@@ -66,7 +64,7 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
   useEffect(() => {
     if (selectedClient) {
       const clientMachinesList = machines.filter(
-        machine => machine.status === 'installed' && 
+        machine => machine.status === 'installed' &&
         machine.clientId === selectedClient.toString()
       );
       setClientMachines(clientMachinesList);
@@ -220,26 +218,27 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
     <form onSubmit={handleSubmit} className="space-y-4 py-4">
       <div className="grid w-full gap-1.5">
         <Label htmlFor="date">Fecha de Recaudación</Label>
-        <Input 
-          id="date" 
+        <Input
+          id="date"
           type="date"
           value={formData.date}
-          onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+          onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))}
           required
         />
       </div>
       
       <div className="grid w-full gap-1.5">
         <Label htmlFor="client">Cliente</Label>
-        <select 
+        <select
           id="client"
+          title="Cliente"
           value={selectedClient || ''}
-          onChange={(e) => setSelectedClient(e.target.value ? parseInt(e.target.value) : null)}
+          onChange={e => setSelectedClient(e.target.value ? parseInt(e.target.value) : null)}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           required
         >
           <option value="">Seleccionar cliente</option>
-          {clients.map((client) => (
+          {clients.map(client => (
             <option key={client.id} value={client.id}>
               {client.name}
             </option>
@@ -252,9 +251,9 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
         <Label htmlFor="distributionPercentage">Porcentaje de Distribución</Label>
         <div className="flex space-x-4">
           <label className="flex items-center space-x-2">
-            <input 
-              type="radio" 
-              name="distributionPercentage" 
+            <input
+              type="radio"
+              name="distributionPercentage"
               value="40"
               checked={formData.distributionPercentage === 40}
               onChange={() => {
@@ -275,9 +274,9 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
             <span>40%</span>
           </label>
           <label className="flex items-center space-x-2">
-            <input 
-              type="radio" 
-              name="distributionPercentage" 
+            <input
+              type="radio"
+              name="distributionPercentage"
               value="50"
               checked={formData.distributionPercentage === 50}
               onChange={() => {
@@ -298,9 +297,9 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
             <span>50%</span>
           </label>
           <label className="flex items-center space-x-2">
-            <input 
-              type="radio" 
-              name="distributionPercentage" 
+            <input
+              type="radio"
+              name="distributionPercentage"
               value="60"
               checked={formData.distributionPercentage === 60}
               onChange={() => {
@@ -350,6 +349,7 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
                     checked={selectedMachines.includes(machine.id)}
                     onChange={() => toggleMachineSelection(machine.id)}
                     className="h-5 w-5"
+                    title="Seleccionar máquina"
                   />
                 </div>
                 
@@ -373,7 +373,7 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
                           type="number"
                           min={machineCounters[machine.id]?.previousCounter || 0}
                           value={machineCounters[machine.id]?.currentCounter || 0}
-                          onChange={(e) => updateCounter(machine.id, parseInt(e.target.value) || 0)}
+                          onChange={e => updateCounter(machine.id, parseInt(e.target.value) || 0)}
                           required
                         />
                       </div>
@@ -412,21 +412,23 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="grid w-full gap-1.5">
               <Label htmlFor="staffMember">Técnico</Label>
-              <Input 
-                id="staffMember" 
+              <Input
+                id="staffMember"
+                title="Técnico"
                 placeholder="Nombre del técnico que realiza la recaudación"
                 value={formData.staffMember}
-                onChange={(e) => setFormData(prev => ({ ...prev, staffMember: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, staffMember: e.target.value }))}
                 required
               />
             </div>
 
             <div className="grid w-full gap-1.5">
               <Label htmlFor="collectionMethod">Método de Recaudación</Label>
-              <select 
+              <select
                 id="collectionMethod"
+                title="Método de Recaudación"
                 value={formData.collectionMethod}
-                onChange={(e) => setFormData(prev => ({ ...prev, collectionMethod: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, collectionMethod: e.target.value }))}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="cash">Efectivo</option>
@@ -439,10 +441,10 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="grid w-full gap-1.5">
               <Label htmlFor="ticketNumber">Número de Ticket</Label>
-              <Input 
-                id="ticketNumber" 
+              <Input
+                id="ticketNumber"
                 value={formData.ticketNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, ticketNumber: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, ticketNumber: e.target.value }))}
               />
               <p className="text-xs text-muted-foreground">
                 Generado automáticamente, puede modificarse
@@ -450,23 +452,23 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
             </div>
             <div className="grid w-full gap-1.5">
               <Label htmlFor="invoiceNumber">Número de Factura</Label>
-              <Input 
-                id="invoiceNumber" 
+              <Input
+                id="invoiceNumber"
                 placeholder="Opcional"
                 value={formData.invoiceNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
               />
             </div>
           </div>
 
           <div className="grid w-full gap-1.5">
             <Label htmlFor="notes">Notas</Label>
-            <textarea 
+            <textarea
               id="notes"
               className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Observaciones adicionales"
               value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
             />
           </div>
 
@@ -484,7 +486,7 @@ export const CollectionForm = ({ onSuccess, onCancel }: CollectionFormProps) => 
           {/* Signature pad */}
           <SignaturePad
             value={formData.signatureData}
-            onChange={(value) => setFormData(prev => ({ ...prev, signatureData: value }))}
+            onChange={value => setFormData(prev => ({ ...prev, signatureData: value }))}
             label="Firma Digital del Responsable"
           />
         </div>

@@ -26,7 +26,6 @@ export const CollectionReport = ({
   const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
   
-  const [filteredCollections, setFilteredCollections] = useState<Collection[]>([]);
   const [reportData, setReportData] = useState<any>({});
   const [totalAmount, setTotalAmount] = useState(0);
   
@@ -53,7 +52,6 @@ export const CollectionReport = ({
       filtered = filtered.filter(c => c.machineId === machineId);
     }
     
-    setFilteredCollections(filtered);
     setTotalAmount(calculateTotal(filtered));
     
     // Process data based on report type

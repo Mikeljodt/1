@@ -27,7 +27,7 @@ import { Toaster } from './components/ui/toaster';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
-  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { user } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
     // Initialize the database
@@ -49,8 +49,8 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} />
-        <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <RegisterPage />} />
+        <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
+        <Route path="/register" element={user ? <Navigate to="/" /> : <RegisterPage />} />
         
         <Route path="/" element={<Layout />}>
           <Route index element={<DashboardPage />} />
