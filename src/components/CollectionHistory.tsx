@@ -15,10 +15,9 @@ export const CollectionHistory = ({ clientId, machineId }: CollectionHistoryProp
   const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
   
-  const [filteredCollections, setFilteredCollections] = useState<Collection[]>([]);
   const [groupedByMonth, setGroupedByMonth] = useState<Record<string, Collection[]>>({});
   
-  // Filter collections based on client and machine
+  // Filter and group collections by month
   useEffect(() => {
     let filtered = [...collections];
     
@@ -32,8 +31,6 @@ export const CollectionHistory = ({ clientId, machineId }: CollectionHistoryProp
     
     // Sort by date (newest first)
     filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    setFilteredCollections(filtered);
     
     // Group by month
     const grouped: Record<string, Collection[]> = {};

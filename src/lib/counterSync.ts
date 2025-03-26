@@ -18,10 +18,8 @@ export interface CounterHistoryEntry {
   timestamp: string;
   previousCounter: number;
   newCounter: number;
-  difference: number;
   source: string;
   notes?: string;
-  userId?: string;
 }
 
 // Function to update a machine's counter
@@ -42,10 +40,8 @@ export const updateMachineCounter = async (update: CounterUpdate): Promise<boole
       timestamp: update.timestamp || new Date().toISOString(),
       previousCounter: machine.currentCounter,
       newCounter: update.newCounter,
-      difference: update.newCounter - machine.currentCounter,
       source: update.source,
-      notes: update.notes,
-      userId: update.userId || 'system'
+      notes: update.notes
     };
     
     // Update the machine counter
@@ -57,12 +53,6 @@ export const updateMachineCounter = async (update: CounterUpdate): Promise<boole
     
     // Store both the updated machine and the history entry
     const tx = db.transaction(['machines', 'counterHistory'], 'readwrite');
-    
-    // Create the counterHistory store if it doesn't exist
-    if (!tx.objectStoreNames.contains('counterHistory')) {
-      db.createObjectStore('counterHistory', { keyPath: 'timestamp' });
-    }
-    
     await tx.objectStore('machines').put(updatedMachine);
     await tx.objectStore('counterHistory').add(historyEntry);
     await tx.done;
@@ -80,14 +70,10 @@ export const getCounterHistory = async (machineId: string): Promise<CounterHisto
   try {
     const db = await getDB();
     
-    // Ensure the counterHistory store exists
-    if (!db.objectStoreNames.contains('counterHistory')) {
-      return [];
-    }
-    
-    // Get all history entries for this machine
-    const allHistory = await db.getAll('counterHistory');
-    return allHistory.filter(entry => entry.machineId === machineId)
+    // Get all history entries for this machine using the index
+    const index = db.transaction('counterHistory').store.index('by-machine-id');
+    const allHistory = await index.getAll(machineId);
+    return allHistory
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   } catch (error) {
     console.error('Error getting counter history:', error);

@@ -48,6 +48,8 @@ export interface Machine {
 export interface Client {
   id: number;
   name: string;
+  establishmentName: string;
+  ownerName: string;
   businessType?: string;
   owner?: string;
   address?: string;
@@ -57,6 +59,8 @@ export interface Client {
   phone?: string;
   email?: string;
   taxId?: string;
+  fiscalIdType?: string;
+  fiscalId?: string;
   morningOpenTime?: string;
   morningCloseTime?: string;
   eveningOpenTime?: string;
@@ -64,6 +68,8 @@ export interface Client {
   closingDay?: string;
   machines: number;
   notes?: string;
+  additionalNotes?: string;
+  depositoSignature?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +85,8 @@ export interface Collection {
   notes?: string;
   ticketNumber?: string;
   invoiceNumber?: string;
+  collectionMethod?: string;
+  staffMember: string;
   createdAt: string;
 }
 
@@ -177,6 +185,21 @@ interface RekreativDB extends DBSchema {
       createdAt: string;
     };
   };
+  counterHistory: {
+    key: string;
+    value: {
+      machineId: string;
+      timestamp: string;
+      previousCounter: number;
+      newCounter: number;
+      source: string;
+      notes?: string;
+    };
+    indexes: {
+      'by-machine-id': string;
+      'by-timestamp': string;
+    };
+  };
 }
 
 // Singleton para la conexión a la base de datos
@@ -224,6 +247,12 @@ export const getDB = async () => {
 
         if (!db.objectStoreNames.contains('backups')) {
           db.createObjectStore('backups', { keyPath: 'id' });
+        }
+
+        if (!db.objectStoreNames.contains('counterHistory')) {
+          const counterHistoryStore = db.createObjectStore('counterHistory', { keyPath: 'timestamp' });
+          counterHistoryStore.createIndex('by-machine-id', 'machineId');
+          counterHistoryStore.createIndex('by-timestamp', 'timestamp');
         }
       },
     });
@@ -355,7 +384,7 @@ export const importDBFromJSON = async (jsonData: string): Promise<void> => {
 };
 
 // Función para inicializar datos de ejemplo
-export const initializeExampleData = async () => {
+export const initializeExampleData = async (): Promise<void> => {
   const db = await getDB();
   
   // Verificar si ya hay datos
@@ -421,6 +450,8 @@ export const initializeExampleData = async () => {
       {
         id: 1,
         name: 'Bar El Rincón',
+        establishmentName: 'Bar El Rincón',
+        ownerName: 'Juan Pérez',
         businessType: 'Bar',
         owner: 'Juan Pérez',
         address: 'Calle Mayor 15',
@@ -436,6 +467,8 @@ export const initializeExampleData = async () => {
       {
         id: 2,
         name: 'Cafetería Central',
+        establishmentName: 'Cafetería Central',
+        ownerName: 'María López',
         businessType: 'Cafetería',
         owner: 'María López',
         address: 'Plaza España 3',

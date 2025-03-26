@@ -138,7 +138,7 @@ export function downloadFile(data: Blob | string, filename: string, mimeType?: s
 }
 
 // Function to generate a PDF (simplified - in a real app, use a library like jsPDF)
-export function exportToPDF(elementId: string, filename: string): void {
+export function exportToPDF(elementId: string, filename: string) {
   alert('Exportación a PDF implementada con una biblioteca externa como jsPDF');
   // In a real implementation, you would:
   // 1. Use a library like jsPDF
@@ -148,16 +148,16 @@ export function exportToPDF(elementId: string, filename: string): void {
 }
 
 // Function to filter collections by date range
-export function filterByDateRange(
-  items: any[], 
+export function filterByDateRange<T extends Record<string, any>>(
+  items: T[], 
   startDate: Date | null, 
   endDate: Date | null, 
-  dateField: string = 'date'
-): any[] {
+  dateField: keyof T = 'date' as keyof T
+): T[] {
   if (!startDate && !endDate) return items;
   
   return items.filter(item => {
-    const itemDate = new Date(item[dateField]);
+    const itemDate = new Date(item[dateField] as string | Date);
     
     if (startDate && endDate) {
       return itemDate >= startDate && itemDate <= endDate;
