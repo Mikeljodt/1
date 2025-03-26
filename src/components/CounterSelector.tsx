@@ -42,10 +42,10 @@ export const CounterSelector = ({
         if (machineCounters.length > 0) {
           // Get the latest counter by date
           const latestCounter = machineCounters.sort((a, b) => 
-            new Date(b.date).getTime() - new Date(a.date).getTime()
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           )[0];
           
-          setLatestCounter(latestCounter.value);
+          setLatestCounter(latestCounter.newCounter);
           setIsLoading(false);
           return;
         }

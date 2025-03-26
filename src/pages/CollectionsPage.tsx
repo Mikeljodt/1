@@ -11,23 +11,22 @@ import {
   fetchCollections, 
   setFilters,
   clearFilters,
-  selectCollection,
-  clearSelectedCollection,
-  Collection
+  // selectCollection, // Eliminado porque no se usa
+  CollectionsState // Importar CollectionsState
 } from '@/store/slices/collectionsSlice';
+import { Collection } from '@/lib/db'; // Importar Collection desde db.ts
 import { fetchMachines } from '@/store/slices/machinesSlice';
 import { fetchClients } from '@/store/slices/clientsSlice';
 import { fetchAllCounters } from '@/store/slices/counterSlice';
 import { toast } from '@/components/ui/use-toast';
 import { CollectionForm } from '@/components/CollectionForm';
 import { CollectionHistory } from '@/components/CollectionHistory';
-import { CollectionReport } from '@/components/CollectionReport';
 import { CollectionAuditTrail } from '@/components/CollectionAuditTrail';
 import { formatDate, formatCurrency, exportToCSV } from '@/lib/utils';
 
 const CollectionsPage = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { collections, filteredCollections, status, filters } = useSelector((state: RootState) => state.collections);
+  const { collections, filteredCollections, filters } = useSelector((state: RootState) => state.collections);
   const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,13 +36,14 @@ const CollectionsPage = () => {
   
   // Estado para el diálogo de filtros
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  // Asegurar que el estado inicial use strings para los campos numéricos
   const [filterFormData, setFilterFormData] = useState({
     startDate: filters.startDate || '',
     endDate: filters.endDate || '',
-    clientId: filters.clientId || '',
+    clientId: filters.clientId?.toString() || '', // Convertir a string
     machineId: filters.machineId || '',
-    minAmount: filters.minAmount || '',
-    maxAmount: filters.maxAmount || '',
+    minAmount: filters.minAmount?.toString() || '', // Convertir a string
+    maxAmount: filters.maxAmount?.toString() || '', // Convertir a string
     staffMember: filters.staffMember || ''
   });
 
@@ -69,7 +69,7 @@ const CollectionsPage = () => {
   // Estado para el diálogo de auditoría
   const [isAuditDialogOpen, setIsAuditDialogOpen] = useState(false);
 
-  // Estado para ordenación
+  // Estado para ordenación - Especificar explícitamente el tipo genérico
   const [sortField, setSortField] = useState<keyof Collection>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -92,29 +92,46 @@ const CollectionsPage = () => {
   });
 
   // Ordenar colecciones
+  // Ordenar colecciones
   const sortedCollections = [...displayedCollections].sort((a, b) => {
-    let aValue = a[sortField];
-    let bValue = b[sortField];
-    
-    // Handle date comparison
-    if (sortField === 'date' || sortField === 'createdAt') {
-      aValue = new Date(aValue as string).getTime();
-      bValue = new Date(bValue as string).getTime();
+    const field = sortField; // keyof Collection
+    // Cambiar let por const y desactivar eslint para el acceso dinámico
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const aValue = a[field] as any; 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bValue = b[field] as any;
+
+    // 1. Manejar campos de fecha específicamente
+    if (field === 'date' || field === 'createdAt') {
+      const dateA = new Date(aValue as string).getTime();
+      const dateB = new Date(bValue as string).getTime();
+      // Asegurarse de que las fechas son válidas antes de comparar
+      if (!isNaN(dateA) && !isNaN(dateB)) {
+         return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+      return 0; // Fallback si las fechas no son válidas
     }
-    
-    // Handle numeric comparison
+
+    // 2. Manejar comparación numérica
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
     }
-    
-    // Handle string comparison
+
+    // 3. Manejar comparación de cadenas (case-insensitive)
     if (typeof aValue === 'string' && typeof bValue === 'string') {
-      return sortDirection === 'asc' 
-        ? aValue.localeCompare(bValue) 
-        : bValue.localeCompare(aValue);
+      // Usar toLowerCase para comparación insensible a mayúsculas/minúsculas
+      return sortDirection === 'asc'
+        ? aValue.toLowerCase().localeCompare(bValue.toLowerCase())
+        : bValue.toLowerCase().localeCompare(aValue.toLowerCase());
     }
     
-    return 0;
+    // 4. Fallback para tipos mixtos o inesperados (convertir a string)
+    // Esto puede ocurrir si un campo es opcional o si los tipos no coinciden
+    const stringA = String(aValue ?? ''); // Usar ?? '' para manejar undefined/null
+    const stringB = String(bValue ?? '');
+     return sortDirection === 'asc'
+        ? stringA.localeCompare(stringB)
+        : stringB.localeCompare(stringA);
   });
 
   // Cuando se selecciona una colección para ver detalles
@@ -141,13 +158,15 @@ const CollectionsPage = () => {
   const handleFilterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newFilters = {
+    
+    // Convertir a número o null y tipar explícitamente antes de pasar a setFilters
+    const newFilters: Partial<CollectionsState['filters']> = { // Añadir tipo explícito
       startDate: filterFormData.startDate || null,
       endDate: filterFormData.endDate || null,
-      clientId: filterFormData.clientId ? parseInt(filterFormData.clientId) : null,
+      clientId: filterFormData.clientId ? parseInt(filterFormData.clientId, 10) : null, // Convertir a number | null
       machineId: filterFormData.machineId || null,
-      minAmount: filterFormData.minAmount ? parseFloat(filterFormData.minAmount) : null,
-      maxAmount: filterFormData.maxAmount ? parseFloat(filterFormData.maxAmount) : null,
+      minAmount: filterFormData.minAmount ? parseFloat(filterFormData.minAmount) : null, // Convertir a number | null
+      maxAmount: filterFormData.maxAmount ? parseFloat(filterFormData.maxAmount) : null, // Convertir a number | null
       staffMember: filterFormData.staffMember || null
     };
     
@@ -181,7 +200,7 @@ const CollectionsPage = () => {
     };
     
     // Apply filters to get the report data
-    let reportData = collections.filter(collection => {
+    const reportData = collections.filter(collection => { // Cambiar let por const
       if (reportFilters.startDate && new Date(collection.date) < new Date(reportFilters.startDate)) {
         return false;
       }
@@ -372,6 +391,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="clientId">Cliente</Label>
                     <select 
                       id="clientId"
+                      aria-label="Filtrar por cliente" // Añadir aria-label
                       value={filterFormData.clientId}
                       onChange={(e) => setFilterFormData(prev => ({ ...prev, clientId: e.target.value }))}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -388,6 +408,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="machineId">Máquina</Label>
                     <select 
                       id="machineId"
+                      aria-label="Filtrar por máquina" // Añadir aria-label
                       value={filterFormData.machineId}
                       onChange={(e) => setFilterFormData(prev => ({ ...prev, machineId: e.target.value }))}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -481,6 +502,7 @@ const CollectionsPage = () => {
                   <Label htmlFor="reportType">Tipo de Informe</Label>
                   <select 
                     id="reportType"
+                    aria-label="Seleccionar tipo de informe" // Añadir aria-label
                     value={reportType}
                     onChange={(e) => setReportType(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -497,6 +519,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="reportClientId">Cliente</Label>
                     <select 
                       id="reportClientId"
+                      aria-label="Seleccionar cliente para informe" // Añadir aria-label
                       value={reportClientId}
                       onChange={(e) => setReportClientId(e.target.value)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -516,6 +539,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="reportMachineId">Máquina</Label>
                     <select 
                       id="reportMachineId"
+                      aria-label="Seleccionar máquina para informe" // Añadir aria-label
                       value={reportMachineId}
                       onChange={(e) => setReportMachineId(e.target.value)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -535,6 +559,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="reportPeriod">Período</Label>
                     <select 
                       id="reportPeriod"
+                      aria-label="Seleccionar período para informe" // Añadir aria-label
                       value={reportPeriod}
                       onChange={(e) => setReportPeriod(e.target.value)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -611,6 +636,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="historyClientId">Cliente</Label>
                     <select 
                       id="historyClientId"
+                      aria-label="Seleccionar cliente para historial" // Añadir aria-label
                       value={historyClientId || ''}
                       onChange={(e) => setHistoryClientId(e.target.value ? parseInt(e.target.value) : null)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -627,6 +653,7 @@ const CollectionsPage = () => {
                     <Label htmlFor="historyMachineId">Máquina</Label>
                     <select
                       id="historyMachineId"
+                      aria-label="Seleccionar máquina para historial" // Añadir aria-label
                       value={historyMachineId || ''}
                       onChange={(e) => setHistoryMachineId(e.target.value || null)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

@@ -1,6 +1,9 @@
 import { getDB, User } from './db';
 import { generateUniqueId } from './utils';
 
+// Re-export User type
+export type { User } from './db';
+
 // User authentication functions
 export async function loginUser(username: string, password: string): Promise<User | null> {
   try {

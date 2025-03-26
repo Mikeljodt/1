@@ -9,7 +9,7 @@ import { Plus, Download, Upload, Search, CheckCircle2, Printer, QrCode, Share2, 
 import { getStatusConfig } from '@/lib/utils';
 import { MachineQRCode } from '@/components/MachineQRCode';
 import { RootState, AppDispatch } from '@/store';
-import { fetchMachines, addMachine, updateMachine, deleteMachine, installMachine, transferMachine } from '@/store/slices/machinesSlice';
+import { fetchMachines, addMachine, deleteMachine, installMachine, transferMachine } from '@/store/slices/machinesSlice';
 import { fetchClients } from '@/store/slices/clientsSlice';
 import { fetchAllCounters, updateMachineCounter } from '@/store/slices/counterSlice';
 import { fetchCollectionsByMachine } from '@/store/slices/collectionsSlice';
@@ -17,10 +17,11 @@ import { toast } from '@/components/ui/use-toast';
 import { CounterSelector } from '@/components/CounterSelector';
 import { SignaturePad } from '@/components/SignatureCanvas';
 import { CollectionHistory } from '@/components/CollectionHistory';
+import { Machine } from '@/lib/db'; // Importar Machine
 
 const MachinesPage = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { machines, status } = useSelector((state: RootState) => state.machines);
+  const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -68,8 +69,8 @@ const MachinesPage = () => {
     signatureData: '',
   });
   
-  // Estado para el diálogo de QR
-  const [selectedQRMachine, setSelectedQRMachine] = useState<any>(null);
+  // Estado para el diálogo de QR - Usar Machine | null
+  const [selectedQRMachine, setSelectedQRMachine] = useState<Machine | null>(null);
 
   // Estado para el diálogo de historial
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
@@ -85,11 +86,13 @@ const MachinesPage = () => {
   useEffect(() => {
     if (transferMachineId) {
       const machine = machines.find(m => m.id === transferMachineId);
-      if (machine && machine.clientId) {
+      // Usar typeof para asegurar que clientId es string antes de parseInt
+      if (machine && typeof machine.clientId === 'string') {
+        const currentClientId = machine.clientId; // Asignar a una nueva constante después de la comprobación
         setTransferFormData(prev => ({
           ...prev,
-          fromClientId: parseInt(machine.clientId),
-          currentCounter: machine.currentCounter.toString()
+          fromClientId: parseInt(currentClientId as string), // Añadir aserción de tipo explícita
+          currentCounter: (machine.currentCounter ?? 0).toString() // Usar ?? 0 para valor por defecto
         }));
       }
     }
@@ -131,7 +134,7 @@ const MachinesPage = () => {
       const machineData = {
         ...newMachineFormData,
         cost: parseFloat(newMachineFormData.purchasePrice || '0'),
-        status: 'warehouse' as 'warehouse',
+        status: 'warehouse', // Eliminar 'as warehouse'
         initialCounter: parseInt(newMachineFormData.initialCounter || '0'),
         splitPercentage: 50,
         description: newMachineFormData.description || '',
@@ -143,7 +146,13 @@ const MachinesPage = () => {
         initialStatus: 'new',
       };
 
-      const result = await dispatch(addMachine(machineData)).unwrap();
+      // Asegurar que status es del tipo correcto antes de enviar
+      const dataToSend: Omit<Machine, 'id' | 'createdAt' | 'updatedAt' | 'history' | 'currentCounter'> = {
+        ...machineData,
+        status: 'warehouse' // Asegurar el tipo literal
+      };
+
+      const result = await dispatch(addMachine(dataToSend)).unwrap();
       
       // Update counter system with initial value
       if (result && result.id) {
@@ -452,8 +461,9 @@ const MachinesPage = () => {
 
   // Función para obtener el nombre del cliente a partir de su ID
   const getClientName = (clientId: string | undefined): string => {
-    if (!clientId) return '-';
-    const client = clients.find(c => c.id.toString() === clientId);
+    if (!clientId) return '-'; // Manejar clientId indefinido correctamente
+    // Comparar id (number) con clientId (string) después de convertir id a string
+    const client = clients.find(c => c.id.toString() === clientId); 
     return client ? client.name : `Cliente ID: ${clientId}`;
   };
 
@@ -498,6 +508,7 @@ const MachinesPage = () => {
                     <Label htmlFor="type">Tipo de Máquina</Label>
                     <select 
                       id="type"
+                      aria-label="Tipo de máquina" // Asegurar aria-label
                       value={newMachineFormData.type}
                       onChange={(e) => setNewMachineFormData(prev => ({ ...prev, type: e.target.value }))}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -596,6 +607,7 @@ const MachinesPage = () => {
                       <input
                         type="checkbox"
                         id="hasManual"
+                        aria-label="Tiene manual de usuario" // Añadido aria-label
                         className="h-4 w-4 rounded border-gray-300"
                         checked={newMachineFormData.hasManual}
                         onChange={(e)=> setNewMachineFormData(prev => ({ ...prev, hasManual: e.target.checked }))}
@@ -608,6 +620,7 @@ const MachinesPage = () => {
                       <input
                         type="checkbox"
                         id="hasWarrantyDoc"
+                        aria-label="Tiene documento de garantía" // Añadido aria-label
                         className="h-4 w-4 rounded border-gray-300"
                         checked={newMachineFormData.hasWarrantyDoc}
                         onChange={(e) => setNewMachineFormData(prev => ({ ...prev, hasWarrantyDoc: e.target.checked }))}
@@ -671,6 +684,7 @@ const MachinesPage = () => {
                   <Label htmlFor="machine">Máquina</Label>
                   <select 
                     id="machine"
+                    aria-label="Seleccionar máquina para instalar" // Asegurar aria-label
                     value={selectedMachine || ''}
                     onChange={(e) => setSelectedMachine(e.target.value || null)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -689,6 +703,7 @@ const MachinesPage = () => {
                   <Label htmlFor="client">Cliente</Label>
                   <select 
                     id="client"
+                    aria-label="Seleccionar cliente para instalar" // Asegurar aria-label
                     value={selectedClient || ''}
                     onChange={(e) => setSelectedClient(e.target.value ? parseInt(e.target.value) : null)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -768,6 +783,7 @@ const MachinesPage = () => {
                   <input
                     type="checkbox"
                     id="acceptedTerms"
+                    aria-label="Aceptar términos de instalación" // Añadido aria-label
                     className="h-4 w-4 rounded border-gray-300"
                     checked={installationFormData.acceptedTerms}
                     onChange={(e) => setInstallationFormData(prev => ({ ...prev, acceptedTerms: e.target.checked }))}
@@ -831,6 +847,7 @@ const MachinesPage = () => {
                   <Label htmlFor="toClientId">Cliente Destino</Label>
                   <select 
                     id="toClientId"
+                    aria-label="Seleccionar cliente destino para traslado" // Asegurar aria-label
                     value={transferFormData.toClientId || ''}
                     onChange={(e) => setTransferFormData(prev => ({ 
                       ...prev, 
@@ -1038,9 +1055,8 @@ const MachinesPage = () => {
           </DialogHeader>
           {historyMachineId && (
             <CollectionHistory 
-              type="machine" 
-              id={historyMachineId} 
-              showFilters={true}
+              clientId={null} // Pasar null ya que filtramos por machineId
+              machineId={historyMachineId} 
             />
           )}
         </DialogContent>

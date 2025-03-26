@@ -1,22 +1,15 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { getDB } from '@/lib/db';
-import { generateUniqueId } from '@/lib/utils';
-
-// Define the Counter interface
-export interface Counter {
-  id: string;
-  machineId: string;
-  value: number;
-  date: string;
-  source: string;
-  notes?: string;
-  createdAt: string;
-  createdBy?: string;
-}
+// import { generateUniqueId } from '@/lib/utils'; // No longer needed here
+import { 
+  CounterHistoryEntry, 
+  CounterUpdate, 
+  updateMachineCounter as updateMachineCounterInDB 
+} from '@/lib/counterSync'; // Import necessary types and function
 
 // Define the state interface
 interface CounterState {
-  counters: Counter[];
+  counters: CounterHistoryEntry[]; // Use CounterHistoryEntry
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
 }
@@ -29,36 +22,40 @@ const initialState: CounterState = {
 };
 
 // Async thunks
-export const fetchAllCounters = createAsyncThunk(
+// Specify return type as CounterHistoryEntry[]
+export const fetchAllCounters = createAsyncThunk<CounterHistoryEntry[]>(
   'counters/fetchAllCounters',
   async () => {
     const db = await getDB();
-    return db.getAll('counters');
+    return db.getAll('counterHistory'); // Corregido el nombre del almacén
   }
 );
 
-export const fetchCountersByMachine = createAsyncThunk(
+// Specify return type as CounterHistoryEntry[] and correct store/index
+export const fetchCountersByMachine = createAsyncThunk<CounterHistoryEntry[], string>(
   'counters/fetchCountersByMachine',
-  async (machineId: string) => {
+  async (machineId) => {
     const db = await getDB();
-    const index = db.transaction('counters').store.index('by-machine-id');
+    // Use 'counterHistory' store and 'by-machine-id' index
+    const index = db.transaction('counterHistory').store.index('by-machine-id'); 
     return index.getAll(machineId);
   }
 );
 
-export const updateMachineCounter = createAsyncThunk(
+// Rewrite updateMachineCounter thunk to use the imported function
+// Specify return type as CounterHistoryEntry | null
+export const updateMachineCounter = createAsyncThunk<CounterHistoryEntry | null, CounterUpdate>(
   'counters/updateMachineCounter',
-  async ({ 
-    machineId, 
-    newCounter, 
-    source, 
-    notes 
-  }: { 
-    machineId: string; 
-    newCounter: number; 
-    source: string;
-    notes?: string;
-  }) => {
+  async (updateData) => {
+    const result = await updateMachineCounterInDB(updateData);
+    if (!result) {
+      // Handle the error case, maybe throw an error or return a specific structure
+      // For now, let's throw an error to be caught by the rejected case
+      throw new Error(`Failed to update counter for machine ${updateData.machineId}`);
+    }
+    return result; // Return the created CounterHistoryEntry
+    /* 
+    // Original implementation removed:
     const db = await getDB();
     const now = new Date().toISOString();
     
@@ -101,8 +98,17 @@ export const updateMachineCounter = createAsyncThunk(
     await tx.done;
     
     return { counter: newCounterRecord, machine: updatedMachine };
+    */
   }
 );
+/* Original parameters for reference:
+  async ({ 
+    machineId, 
+    newCounter, 
+    source, 
+    notes 
+  }: CounterUpdate) => { ... }
+*/
 
 // Create the slice
 const counterSlice = createSlice({
@@ -115,7 +121,8 @@ const counterSlice = createSlice({
       .addCase(fetchAllCounters.pending, (state) => {
         state.status = 'loading';
       })
-      .addCase(fetchAllCounters.fulfilled, (state, action: PayloadAction<Counter[]>) => {
+      // Update PayloadAction type
+      .addCase(fetchAllCounters.fulfilled, (state, action: PayloadAction<CounterHistoryEntry[]>) => { 
         state.status = 'succeeded';
         state.counters = action.payload;
       })
@@ -125,16 +132,38 @@ const counterSlice = createSlice({
       })
       
       // Handle fetchCountersByMachine
-      .addCase(fetchCountersByMachine.fulfilled, (state, action: PayloadAction<Counter[]>) => {
-        // We don't replace all counters, just add these to the existing array if they're not already there
-        const existingIds = new Set(state.counters.map(c => c.id));
-        const newCounters = action.payload.filter(c => !existingIds.has(c.id));
-        state.counters = [...state.counters, ...newCounters];
+      // Update PayloadAction type and merging logic
+      .addCase(fetchCountersByMachine.fulfilled, (state, action: PayloadAction<CounterHistoryEntry[]>) => {
+        // Use timestamp as the unique key for merging
+        const existingTimestamps = new Set(state.counters.map(c => c.timestamp));
+        const newCounters = action.payload.filter(c => !existingTimestamps.has(c.timestamp));
+        state.counters = [...state.counters, ...newCounters].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()); // Keep sorted
       })
-      
+      .addCase(fetchCountersByMachine.pending, (_state) => { // Optional: Add pending/rejected if needed
+        // state.status = 'loading';
+      })
+      .addCase(fetchCountersByMachine.rejected, (_state, _action) => { // Optional: Add pending/rejected if needed - Fix unused variable
+        // _state.status = 'failed'; // Use _state if uncommented
+        // _state.error = _action.error.message || 'Failed to fetch counters for machine'; // Use _action and _state if uncommented
+      })
+
       // Handle updateMachineCounter
-      .addCase(updateMachineCounter.fulfilled, (state, action) => {
-        state.counters.push(action.payload.counter);
+      // Update PayloadAction type and logic
+      .addCase(updateMachineCounter.fulfilled, (state, action: PayloadAction<CounterHistoryEntry | null>) => {
+        if (action.payload) { // Only add if the update was successful
+          state.counters.push(action.payload);
+          state.counters.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()); // Keep sorted
+        }
+        // Optionally handle the null case (update failed) if needed
+      })
+      .addCase(updateMachineCounter.pending, (_state) => { // Optional: Add pending/rejected if needed
+        // state.status = 'loading';
+      })
+      .addCase(updateMachineCounter.rejected, (_state, action) => { // Optional: Add pending/rejected if needed
+         // _state.status = 'failed'; // Example: Set status to failed - Let's keep the state modification commented out as it was, but fix the unused variable warning. If needed, uncomment and use _state.
+         // _state.error = action.error.message || 'Failed to update counter'; // Example: Store error - Same as above.
+         // For now, just log the error or handle it differently if needed without modifying state directly here.
+         console.error("Update machine counter failed:", action.error);
       });
   }
 });

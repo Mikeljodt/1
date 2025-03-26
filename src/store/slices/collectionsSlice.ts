@@ -1,29 +1,10 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { getDB } from '@/lib/db';
+import { getDB, Collection } from '@/lib/db'; // Importar Collection desde db.ts
 import { generateUniqueId } from '@/lib/utils';
 
-// Define the Collection interface
-export interface Collection {
-  id: string;
-  machineId: string;
-  clientId: number;
-  amount: number;
-  date: string;
-  previousCounter: number;
-  currentCounter: number;
-  notes?: string;
-  ticketNumber?: string;
-  invoiceNumber?: string;
-  collectionMethod?: string;
-  staffMember: string;
-  signatureData?: string;
-  distributionPercentage?: number;
-  createdAt: string;
-  createdBy?: string;
-}
-
-// Define the state interface
-interface CollectionsState {
+// Define the state interface (and export it)
+// Ya no necesitamos definir Collection aquí
+export interface CollectionsState {
   collections: Collection[];
   filteredCollections: Collection[];
   selectedCollection: Collection | null;

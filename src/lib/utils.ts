@@ -74,7 +74,8 @@ export function calculateRevenue(counterDifference: number, splitPercentage: num
 }
 
 // Function to export data to CSV
-export function exportToCSV(data: any[], filename: string): void {
+// Usamos 'unknown' en lugar de 'any' para mayor seguridad de tipos
+export function exportToCSV<T extends Record<string, unknown>>(data: T[], filename: string): void {
   if (!data.length) return;
   
   // Get headers from the first object
@@ -138,7 +139,7 @@ export function downloadFile(data: Blob | string, filename: string, mimeType?: s
 }
 
 // Function to generate a PDF (simplified - in a real app, use a library like jsPDF)
-export function exportToPDF(elementId: string, filename: string) {
+export function exportToPDF(_elementId: string, _filename: string): void {
   alert('Exportación a PDF implementada con una biblioteca externa como jsPDF');
   // In a real implementation, you would:
   // 1. Use a library like jsPDF
@@ -148,16 +149,27 @@ export function exportToPDF(elementId: string, filename: string) {
 }
 
 // Function to filter collections by date range
+// Revertimos a Record<string, any> para compatibilidad y desactivamos eslint para esta línea
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function filterByDateRange<T extends Record<string, any>>(
   items: T[], 
   startDate: Date | null, 
   endDate: Date | null, 
-  dateField: keyof T = 'date' as keyof T
+  dateField: string = 'date'
 ): T[] {
   if (!startDate && !endDate) return items;
   
   return items.filter(item => {
-    const itemDate = new Date(item[dateField] as string | Date);
+    const dateValue = item[dateField];
+    // Comprobación básica
+    if (!dateValue) {
+       return false;
+    }
+    const itemDate = new Date(dateValue);
+     if (isNaN(itemDate.getTime())) {
+       // Podrías añadir un console.warn aquí si quieres
+       return false;
+    }
     
     if (startDate && endDate) {
       return itemDate >= startDate && itemDate <= endDate;
@@ -172,36 +184,52 @@ export function filterByDateRange<T extends Record<string, any>>(
 }
 
 // Function to group collections by period
-export function groupByPeriod(
-  items: any[],
+// Revertimos a Record<string, any> y desactivamos eslint para esta línea
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function groupByPeriod<T extends Record<string, any>>(
+  items: T[],
   period: 'day' | 'week' | 'month' | 'year',
   dateField: string = 'date'
-): Record<string, any[]> {
-  const result: Record<string, any[]> = {};
+): Record<string, T[]> {
+  const result: Record<string, T[]> = {};
   
   items.forEach(item => {
-    const date = new Date(item[dateField]);
+    const dateValue = item[dateField];
+     if (!dateValue) {
+      return; // Saltar item
+    }
+    const date = new Date(dateValue);
+     if (isNaN(date.getTime())) {
+       // Podrías añadir un console.warn aquí si quieres
+       return; // Saltar item
+    }
     let key: string;
     
     switch (period) {
-      case 'day':
+      case 'day': { // Añadir llaves
         key = date.toISOString().split('T')[0]; // YYYY-MM-DD
         break;
-      case 'week':
+      } // Añadir llaves
+      case 'week': { // Añadir llaves
         // Get the week number
         const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
         const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
         const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
         key = `${date.getFullYear()}-W${weekNumber}`;
         break;
-      case 'month':
+      } // Añadir llaves
+      case 'month': { // Añadir llaves
         key = `${date.getFullYear()}-${date.getMonth() + 1}`;
         break;
-      case 'year':
+      } // Añadir llaves
+      case 'year': { // Añadir llaves
         key = date.getFullYear().toString();
         break;
-      default:
+      } // Añadir llaves
+      default: { // Añadir llaves (opcional pero buena práctica)
         key = date.toISOString();
+        break; // Añadir break
+      } // Añadir llaves
     }
     
     if (!result[key]) {
@@ -215,8 +243,15 @@ export function groupByPeriod(
 }
 
 // Function to calculate total amount from collections
-export function calculateTotal(items: any[], field: string = 'amount'): number {
-  return items.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
+// Revertimos a Record<string, any> y desactivamos eslint para esta línea
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function calculateTotal<T extends Record<string, any>>(items: T[], field: string = 'amount'): number {
+  return items.reduce((sum, item) => {
+    const value = item[field];
+    // Usamos parseFloat directamente, que maneja strings y números (y devuelve NaN para otros)
+    const numericValue = parseFloat(value);
+    return sum + (isNaN(numericValue) ? 0 : numericValue);
+  }, 0);
 }
 
 // Function to generate a report title based on date range

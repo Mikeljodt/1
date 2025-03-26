@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import type { CounterHistoryEntry } from './counterSync'; // Importar el tipo
 
 // Definición de tipos para las entidades principales
 export interface Machine {
@@ -48,8 +49,6 @@ export interface Machine {
 export interface Client {
   id: number;
   name: string;
-  establishmentName: string;
-  ownerName: string;
   businessType?: string;
   owner?: string;
   address?: string;
@@ -59,8 +58,6 @@ export interface Client {
   phone?: string;
   email?: string;
   taxId?: string;
-  fiscalIdType?: string;
-  fiscalId?: string;
   morningOpenTime?: string;
   morningCloseTime?: string;
   eveningOpenTime?: string;
@@ -68,8 +65,6 @@ export interface Client {
   closingDay?: string;
   machines: number;
   notes?: string;
-  additionalNotes?: string;
-  depositoSignature?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,9 +80,12 @@ export interface Collection {
   notes?: string;
   ticketNumber?: string;
   invoiceNumber?: string;
-  collectionMethod?: string;
-  staffMember: string;
+  collectionMethod?: string; // Añadido
+  staffMember: string; // Añadido y requerido
+  signatureData?: string; // Añadido
+  distributionPercentage?: number; // Añadido
   createdAt: string;
+  createdBy?: string; // Añadido
 }
 
 export interface Expense {
@@ -185,19 +183,11 @@ interface RekreativDB extends DBSchema {
       createdAt: string;
     };
   };
-  counterHistory: {
-    key: string;
-    value: {
-      machineId: string;
-      timestamp: string;
-      previousCounter: number;
-      newCounter: number;
-      source: string;
-      notes?: string;
-    };
+  counterHistory: { // Añadir el nuevo almacén
+    key: string; // Usaremos timestamp como clave principal
+    value: CounterHistoryEntry;
     indexes: {
       'by-machine-id': string;
-      'by-timestamp': string;
     };
   };
 }
@@ -207,9 +197,12 @@ let dbPromise: Promise<IDBPDatabase<RekreativDB>> | null = null;
 
 export const getDB = async () => {
   if (!dbPromise) {
-    dbPromise = openDB<RekreativDB>('rekreativ-db', 1, {
-      upgrade(db) {
-        // Crear almacenes de objetos si no existen
+    // Incrementar la versión de la BD a 2
+    dbPromise = openDB<RekreativDB>('rekreativ-db', 2, {
+      upgrade(db, oldVersion, newVersion, _transaction) {
+        console.log(`Upgrading DB from version ${oldVersion} to ${newVersion}`);
+
+        // Crear almacenes de objetos si no existen (Lógica original para v1)
         if (!db.objectStoreNames.contains('machines')) {
           const machinesStore = db.createObjectStore('machines', { keyPath: 'id' });
           machinesStore.createIndex('by-serial-number', 'serialNumber', { unique: true });
@@ -249,10 +242,11 @@ export const getDB = async () => {
           db.createObjectStore('backups', { keyPath: 'id' });
         }
 
+        // Crear nuevo almacén para v2
         if (!db.objectStoreNames.contains('counterHistory')) {
-          const counterHistoryStore = db.createObjectStore('counterHistory', { keyPath: 'timestamp' });
-          counterHistoryStore.createIndex('by-machine-id', 'machineId');
-          counterHistoryStore.createIndex('by-timestamp', 'timestamp');
+          const historyStore = db.createObjectStore('counterHistory', { keyPath: 'timestamp' }); // Usar timestamp como keyPath
+          historyStore.createIndex('by-machine-id', 'machineId');
+          console.log('Created counterHistory object store');
         }
       },
     });
@@ -260,10 +254,20 @@ export const getDB = async () => {
   return dbPromise;
 };
 
+// Interfaz para la estructura de datos exportada
+interface DatabaseExportData {
+  machines: Machine[];
+  clients: Client[];
+  collections: Collection[];
+  expenses: Expense[];
+  companyProfile: CompanyProfile[];
+  users: Omit<User, 'password'>[];
+}
+
 // Función para inicializar la base de datos
 export const initDB = async (): Promise<void> => {
   try {
-    const db = await getDB();
+    await getDB(); // Asegurarse de que la conexión se establece
     console.log('Database initialized successfully');
     await initializeExampleData();
     return;
@@ -276,30 +280,30 @@ export const initDB = async (): Promise<void> => {
 // Función para exportar toda la base de datos a JSON
 export const exportDBToJSON = async (): Promise<string> => {
   const db = await getDB();
-  const exportData: Record<string, any> = {};
-  
+  const exportData: Partial<DatabaseExportData> = {}; // Usar Partial<DatabaseExportData>
+
   // Exportar máquinas
   exportData.machines = await db.getAll('machines');
-  
+
   // Exportar clientes
   exportData.clients = await db.getAll('clients');
-  
+
   // Exportar colecciones
   exportData.collections = await db.getAll('collections');
-  
+
   // Exportar gastos
   exportData.expenses = await db.getAll('expenses');
-  
+
   // Exportar perfil de empresa
   exportData.companyProfile = await db.getAll('companyProfile');
-  
+
   // Exportar usuarios (sin contraseñas)
   const users = await db.getAll('users');
   exportData.users = users.map(user => {
-    const { password, ...userWithoutPassword } = user;
+    const { password: _password, ...userWithoutPassword } = user; // Prefijar variable no usada con _
     return userWithoutPassword;
   });
-  
+
   // Convertir a JSON
   return JSON.stringify(exportData, null, 2);
 };
@@ -308,90 +312,67 @@ export const exportDBToJSON = async (): Promise<string> => {
 export const importDBFromJSON = async (jsonData: string): Promise<void> => {
   const db = await getDB();
   const importData = JSON.parse(jsonData);
-  
+
+  // Obtener todos los nombres de almacenes definidos en el esquema actual
+  const storeNames = db.objectStoreNames;
+
+  // Filtrar los nombres de almacenes que existen en importData
+  const storesToImport = Array.from(storeNames).filter(name => importData[name] && Array.isArray(importData[name]));
+
+  if (storesToImport.length === 0) {
+    console.warn("No data found in JSON matching current DB schema stores.");
+    return;
+  }
+
   // Transacción para importar todos los datos
-  const tx = db.transaction(
-    ['machines', 'clients', 'collections', 'expenses', 'companyProfile', 'users'],
-    'readwrite'
-  );
-  
-  // Limpiar y reemplazar datos
-  await tx.objectStore('machines').clear();
-  await tx.objectStore('clients').clear();
-  await tx.objectStore('collections').clear();
-  await tx.objectStore('expenses').clear();
-  await tx.objectStore('companyProfile').clear();
-  await tx.objectStore('users').clear();
-  
-  // Importar máquinas
-  if (importData.machines && Array.isArray(importData.machines)) {
-    for (const machine of importData.machines) {
-      await tx.objectStore('machines').add(machine);
+  // Aserción de tipo más específica para el array de nombres de almacén
+  const tx = db.transaction(storesToImport as ('machines' | 'clients' | 'collections' | 'expenses' | 'companyProfile' | 'users' | 'backups' | 'counterHistory')[], 'readwrite');
+
+  try {
+    // Limpiar y reemplazar datos solo para los almacenes que se van a importar
+    for (const storeName of storesToImport) {
+      // Aserción de tipo más específica para el nombre del almacén
+      await tx.objectStore(storeName as 'machines' | 'clients' | 'collections' | 'expenses' | 'companyProfile' | 'users' | 'backups' | 'counterHistory').clear();
+      console.log(`Cleared store: ${storeName}`);
+      for (const item of importData[storeName]) {
+        // Manejo especial para usuarios para intentar preservar contraseñas
+        if (storeName === 'users') {
+          const currentUsers = await db.getAll('users'); // Leer dentro de la tx si es necesario o antes
+          const usernameToPasswordMap = new Map(currentUsers.map(u => [u.username, u.password]));
+          const password = item.password || usernameToPasswordMap.get(item.username) || 'defaultPassword'; // Asegurar que la contraseña exista
+          await tx.objectStore('users').add({ ...item, password });
+        } else {
+          // Aserción de tipo más específica para el nombre del almacén
+          await tx.objectStore(storeName as 'machines' | 'clients' | 'collections' | 'expenses' | 'companyProfile' | 'users' | 'backups' | 'counterHistory').add(item);
+        }
+      }
+      console.log(`Imported data into store: ${storeName}`);
     }
-  }
-  
-  // Importar clientes
-  if (importData.clients && Array.isArray(importData.clients)) {
-    for (const client of importData.clients) {
-      await tx.objectStore('clients').add(client);
+
+    // Completar la transacción
+    await tx.done;
+    console.log("Database import completed successfully.");
+
+  } catch (error) {
+    console.error("Error during database import:", error);
+    // Si hay un error, intentar abortar la transacción
+    if (tx.error) { // Simplificado: si hay error, intentar abortar
+       tx.abort();
     }
+    throw error; // Re-lanzar el error
   }
-  
-  // Importar colecciones
-  if (importData.collections && Array.isArray(importData.collections)) {
-    for (const collection of importData.collections) {
-      await tx.objectStore('collections').add(collection);
-    }
-  }
-  
-  // Importar gastos
-  if (importData.expenses && Array.isArray(importData.expenses)) {
-    for (const expense of importData.expenses) {
-      await tx.objectStore('expenses').add(expense);
-    }
-  }
-  
-  // Importar perfil de empresa
-  if (importData.companyProfile && Array.isArray(importData.companyProfile)) {
-    for (const profile of importData.companyProfile) {
-      await tx.objectStore('companyProfile').add(profile);
-    }
-  }
-  
-  // Importar usuarios (si hay datos de usuarios)
-  if (importData.users && Array.isArray(importData.users)) {
-    // Obtener usuarios actuales para preservar contraseñas si es posible
-    const currentUsers = await db.getAll('users');
-    const usernameToPasswordMap = new Map();
-    
-    currentUsers.forEach(user => {
-      usernameToPasswordMap.set(user.username, user.password);
-    });
-    
-    for (const user of importData.users) {
-      // Si el usuario tiene contraseña, usarla; de lo contrario, intentar recuperar la existente
-      const password = user.password || usernameToPasswordMap.get(user.username) || 'defaultPassword';
-      
-      await tx.objectStore('users').add({
-        ...user,
-        password
-      });
-    }
-  }
-  
-  // Completar la transacción
-  await tx.done;
 };
 
+
 // Función para inicializar datos de ejemplo
-export const initializeExampleData = async (): Promise<void> => {
+export const initializeExampleData = async () => {
   const db = await getDB();
-  
+
   // Verificar si ya hay datos
   const machinesCount = await db.count('machines');
   const clientsCount = await db.count('clients');
   const usersCount = await db.count('users');
-  
+
   if (machinesCount === 0) {
     // Crear máquinas de ejemplo
     const machines: Machine[] = [
@@ -436,22 +417,20 @@ export const initializeExampleData = async (): Promise<void> => {
         }]
       }
     ];
-    
+
     const tx = db.transaction('machines', 'readwrite');
     for (const machine of machines) {
       await tx.store.add(machine);
     }
     await tx.done;
   }
-  
+
   if (clientsCount === 0) {
     // Crear clientes de ejemplo
     const clients: Client[] = [
       {
         id: 1,
         name: 'Bar El Rincón',
-        establishmentName: 'Bar El Rincón',
-        ownerName: 'Juan Pérez',
         businessType: 'Bar',
         owner: 'Juan Pérez',
         address: 'Calle Mayor 15',
@@ -467,8 +446,6 @@ export const initializeExampleData = async (): Promise<void> => {
       {
         id: 2,
         name: 'Cafetería Central',
-        establishmentName: 'Cafetería Central',
-        ownerName: 'María López',
         businessType: 'Cafetería',
         owner: 'María López',
         address: 'Plaza España 3',
@@ -482,14 +459,14 @@ export const initializeExampleData = async (): Promise<void> => {
         updatedAt: new Date().toISOString()
       }
     ];
-    
+
     const tx = db.transaction('clients', 'readwrite');
     for (const client of clients) {
       await tx.store.add(client);
     }
     await tx.done;
   }
-  
+
   // Inicializar perfil de empresa si no existe
   const companyProfile = await db.get('companyProfile', 'default');
   if (!companyProfile) {
@@ -501,13 +478,13 @@ export const initializeExampleData = async (): Promise<void> => {
       updatedAt: new Date().toISOString()
     });
   }
-  
+
   // Crear usuario administrador por defecto si no hay usuarios
   if (usersCount === 0) {
     await db.add('users', {
       id: 'admin-default',
       username: 'admin',
-      password: 'admin',
+      password: 'admin', // Considerar un método más seguro en producción
       name: 'Administrador',
       role: 'admin',
       createdAt: new Date().toISOString()

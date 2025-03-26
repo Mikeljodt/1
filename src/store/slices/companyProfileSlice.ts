@@ -13,10 +13,12 @@ const initialState: CompanyProfileState = {
   error: null,
 };
 
-export const fetchCompanyProfile = createAsyncThunk('companyProfile/fetchCompanyProfile', async () => {
-  const db = await getDB();
+export const fetchCompanyProfile = createAsyncThunk<CompanyProfile | null, void>(
+  'companyProfile/fetchCompanyProfile',
+  async () => {
+    const db = await getDB();
   // There should only be one company profile, with ID 'main'
-  const profile = await db.get('company_profile', 'main');
+  const profile = await db.get('companyProfile', 'main');
   return profile || null;
 });
 
@@ -27,7 +29,7 @@ export const saveCompanyProfile = createAsyncThunk(
     const now = new Date().toISOString();
     
     // Check if profile already exists
-    const existingProfile = await db.get('company_profile', 'main');
+    const existingProfile = await db.get('companyProfile', 'main');
     
     if (existingProfile) {
       // Update existing profile
@@ -37,7 +39,7 @@ export const saveCompanyProfile = createAsyncThunk(
         updatedAt: now,
       };
       
-      await db.put('company_profile', updatedProfile);
+      await db.put('companyProfile', updatedProfile);
       return updatedProfile;
     } else {
       // Create new profile
@@ -48,7 +50,7 @@ export const saveCompanyProfile = createAsyncThunk(
         updatedAt: now,
       };
       
-      await db.add('company_profile', newProfile);
+      await db.add('companyProfile', newProfile);
       return newProfile;
     }
   }

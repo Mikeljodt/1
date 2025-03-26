@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { Collection } from '@/store/slices/collectionsSlice';
+import { Collection } from '@/lib/db'; // Corrected import path
 
 interface CollectionHistoryProps {
   clientId: number | null;
@@ -15,9 +15,10 @@ export const CollectionHistory = ({ clientId, machineId }: CollectionHistoryProp
   const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
   
+  // const [filteredCollections, setFilteredCollections] = useState<Collection[]>([]); // Removed as it's unused
   const [groupedByMonth, setGroupedByMonth] = useState<Record<string, Collection[]>>({});
-  
-  // Filter and group collections by month
+
+  // Filter collections based on client and machine
   useEffect(() => {
     let filtered = [...collections];
     
@@ -31,6 +32,8 @@ export const CollectionHistory = ({ clientId, machineId }: CollectionHistoryProp
     
     // Sort by date (newest first)
     filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // setFilteredCollections(filtered); // Removed as it's unused
     
     // Group by month
     const grouped: Record<string, Collection[]> = {};

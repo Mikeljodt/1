@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import { formatDate, formatCurrency, groupByPeriod, calculateTotal } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collection } from '@/store/slices/collectionsSlice';
+import { Collection } from '@/lib/db'; // Importar desde db.ts
 
 interface CollectionReportProps {
   startDate?: string;
@@ -26,7 +26,8 @@ export const CollectionReport = ({
   const { machines } = useSelector((state: RootState) => state.machines);
   const { clients } = useSelector((state: RootState) => state.clients);
   
-  const [reportData, setReportData] = useState<any>({});
+  // const [filteredCollections, setFilteredCollections] = useState<Collection[]>([]); // Eliminado ya que no se usa
+  const [reportData, setReportData] = useState<Record<string, Collection[]>>({}); // Usar Record<string, Collection[]> en lugar de any
   const [totalAmount, setTotalAmount] = useState(0);
   
   // Filter and process collections
@@ -52,6 +53,7 @@ export const CollectionReport = ({
       filtered = filtered.filter(c => c.machineId === machineId);
     }
     
+    // setFilteredCollections(filtered); // Eliminado ya que no se usa
     setTotalAmount(calculateTotal(filtered));
     
     // Process data based on report type

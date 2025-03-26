@@ -110,15 +110,19 @@ const DashboardPage = () => {
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .slice(0, 5)
                 .map((item, i) => (
-                  <div key={i} className="flex items-center">
+                  <div key={item.id || i} className="flex items-center"> {/* Usar item.id si existe */}
                     <div className="w-2 h-2 rounded-full bg-primary mr-3" />
                     <div className="flex-1 space-y-1">
                       <p className="text-sm font-medium leading-none">
+                        {/* Type guard para determinar el tipo de item */}
                         {'history' in item ? 
-                          item.history[0]?.details : 
-                          (item as any).amount ? 
-                          `Recaudación registrada: ${formatCurrency((item as any).amount)}` : 
-                          'Nueva máquina agregada'}
+                          `Máquina ${item.serialNumber}: ${item.history[item.history.length - 1]?.details || 'Creada'}` : 
+                        'staffMember' in item ? 
+                          `Recaudación: ${formatCurrency(item.amount)} (Téc: ${item.staffMember})` :
+                        'description' in item ? // Asumimos que es Expense si tiene description
+                          `Gasto: ${formatCurrency(item.amount)} - ${item.description}` :
+                          'Actividad desconocida' // Fallback
+                        }
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(item.createdAt).toLocaleDateString('es-ES', {

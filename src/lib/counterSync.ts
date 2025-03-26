@@ -18,12 +18,14 @@ export interface CounterHistoryEntry {
   timestamp: string;
   previousCounter: number;
   newCounter: number;
+  difference: number;
   source: string;
   notes?: string;
+  userId?: string;
 }
 
 // Function to update a machine's counter
-export const updateMachineCounter = async (update: CounterUpdate): Promise<boolean> => {
+export const updateMachineCounter = async (update: CounterUpdate): Promise<CounterHistoryEntry | null> => {
   try {
     const db = await getDB();
     
@@ -31,7 +33,7 @@ export const updateMachineCounter = async (update: CounterUpdate): Promise<boole
     const machine = await db.get('machines', update.machineId);
     if (!machine) {
       console.error(`Machine with ID ${update.machineId} not found`);
-      return false;
+      return null; // Corregido: devolver null si no se encuentra la máquina
     }
     
     // Create a history entry
@@ -40,8 +42,10 @@ export const updateMachineCounter = async (update: CounterUpdate): Promise<boole
       timestamp: update.timestamp || new Date().toISOString(),
       previousCounter: machine.currentCounter,
       newCounter: update.newCounter,
+      difference: update.newCounter - machine.currentCounter,
       source: update.source,
-      notes: update.notes
+      notes: update.notes,
+      userId: update.userId || 'system'
     };
     
     // Update the machine counter
@@ -52,16 +56,21 @@ export const updateMachineCounter = async (update: CounterUpdate): Promise<boole
     };
     
     // Store both the updated machine and the history entry
+    // Ahora 'counterHistory' está definido en el esquema de db.ts, por lo que la transacción es válida.
     const tx = db.transaction(['machines', 'counterHistory'], 'readwrite');
+    
+    // El almacén 'counterHistory' se crea/actualiza en la función upgrade de db.ts.
+    // Ya no es necesario crearlo aquí.
+    
     await tx.objectStore('machines').put(updatedMachine);
     await tx.objectStore('counterHistory').add(historyEntry);
     await tx.done;
     
     console.log(`Counter updated for machine ${update.machineId}: ${machine.currentCounter} -> ${update.newCounter}`);
-    return true;
+    return historyEntry; // Devolver la entrada del historial
   } catch (error) {
     console.error('Error updating machine counter:', error);
-    return false;
+    return null; // Devolver null en caso de error
   }
 };
 
@@ -70,10 +79,14 @@ export const getCounterHistory = async (machineId: string): Promise<CounterHisto
   try {
     const db = await getDB();
     
-    // Get all history entries for this machine using the index
-    const index = db.transaction('counterHistory').store.index('by-machine-id');
-    const allHistory = await index.getAll(machineId);
-    return allHistory
+    // Ensure the counterHistory store exists
+    if (!db.objectStoreNames.contains('counterHistory')) {
+      return [];
+    }
+    
+    // Get all history entries for this machine
+    const allHistory = await db.getAll('counterHistory');
+    return allHistory.filter(entry => entry.machineId === machineId)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   } catch (error) {
     console.error('Error getting counter history:', error);

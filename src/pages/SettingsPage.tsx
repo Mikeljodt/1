@@ -10,7 +10,7 @@ import { BackupManager } from '@/components/BackupManager';
 
 const SettingsPage = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { profile, status } = useSelector((state: RootState) => state.companyProfile);
+  const { profile } = useSelector((state: RootState) => state.companyProfile);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -19,6 +19,7 @@ const SettingsPage = () => {
     email: '',
     taxId: '',
     logo: '',
+    vatPercentage: 0, // Add vatPercentage to initial state
   });
 
   // Cargar el perfil de la empresa cuando se monta el componente
@@ -35,7 +36,8 @@ const SettingsPage = () => {
         phone: profile.phone || '',
         email: profile.email || '',
         taxId: profile.taxId || '',
-        logo: profile.logo || '',
+        logo: profile.logo || '', // Add logo property
+        vatPercentage: profile.vatPercentage || 0, // Ensure vatPercentage is set
       });
     }
   }, [profile]);
@@ -55,8 +57,10 @@ const SettingsPage = () => {
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        if (event.target?.result) {
-          setFormData(prev => ({ ...prev, logo: event.target.result as string }));
+        const target = event.target; // Assign to local variable
+        // Check the local variable
+        if (target && target.result) { 
+          setFormData(prev => ({ ...prev, logo: target.result as string }));
         }
       };
       reader.readAsDataURL(file);
